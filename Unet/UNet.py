@@ -170,7 +170,7 @@ if __name__ == "__main__":
     root = "D:/IIT_Ropar/Datasets/Agriculture/WeedyRice-RGBMS-DB"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    NUM_RUNS = 5
+    NUM_RUNS = 1
     all_results = []
 
     for run in range(NUM_RUNS):
@@ -212,6 +212,8 @@ if __name__ == "__main__":
 
         # TEST
         model.load_state_dict(best_model)
+        torch.save(model.state_dict(), "crf_unet_model.pth")
+        print("Model saved successfully!")
         model.to(device)
 
         test = evaluate(model, test_loader, device)
@@ -237,3 +239,64 @@ if __name__ == "__main__":
 
         for i, r in enumerate(all_results):
             writer.writerow([i+1, r["Accuracy"], r["Precision"], r["Recall"], r["IoU"], r["Dice"]])
+
+import matplotlib.pyplot as plt
+
+model.eval()
+
+# Selected test images
+indices = [1, 5, 10, 15, 20]
+
+# Create figure
+fig, axes = plt.subplots(len(indices), 3, figsize=(12, 4 * len(indices)))
+
+with torch.no_grad():
+
+    for i, idx in enumerate(indices):
+
+        # Load sample
+        rgb, ms, mask = test_loader.dataset[idx]
+
+        rgb_input = rgb.unsqueeze(0).to(device)
+        ms_input = ms.unsqueeze(0).to(device)
+
+        # Prediction
+        pred = model(rgb_input, ms_input)
+
+        pred = torch.argmax(pred, dim=1).squeeze(0).cpu().numpy()
+
+        # Convert RGB for display
+        rgb_img = rgb.permute(1,2,0).cpu().numpy()
+
+        # -------------------------
+        # INPUT IMAGE
+        # -------------------------
+        axes[i,0].imshow(rgb_img)
+        axes[i,0].set_title(f"Input {idx}")
+        axes[i,0].axis("off")
+
+        # -------------------------
+        # GROUND TRUTH
+        # -------------------------
+        axes[i,1].imshow(mask.cpu().numpy(), cmap='gray')
+        axes[i,1].set_title(f"Ground Truth {idx}")
+        axes[i,1].axis("off")
+
+        # -------------------------
+        # PREDICTION
+        # -------------------------
+        overlay = rgb_img.copy()
+        overlay[pred == 1] = [1, 0, 0]
+
+        axes[i,2].imshow(overlay)
+        axes[i,2].set_title(f"Prediction {idx}")
+        axes[i,2].axis("off")
+
+# Adjust layout
+plt.tight_layout()
+
+# Save figure
+plt.savefig("all_predictions.png")
+
+# Show everything
+plt.show()
